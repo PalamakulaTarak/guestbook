@@ -1,37 +1,28 @@
-# Please choose from the below set of Docker commands to complete your Dockerfile:
+# ---------- Stage 1: Build ----------
+    FROM golang:1.20 AS builder
+    WORKDIR /app
 
-# COPY
-# RUN
-# ADD
-# EXPOSE
-# FROM
-# CMD
-# PUSH
-# PULL
-# WORKDIR
+    # Copy go.mod and go.sum first (better caching)
+    COPY go.mod go.sum ./
+    RUN go mod download
 
+    # copy source and build static binary
+    COPY . .
+    RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main .
 
-FROM golang:1.18 AS builder
+    # ---------- Stage 2: Runtime ----------
+    FROM ubuntu:18.04
+    WORKDIR /app
 
-WORKDIR /app
+    # minimal runtime deps (SSL certs)
+    RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY main.go .
+    # copy built app + static file
+    COPY --from=builder /app/main /app/guestbook
+    COPY public/index.html /app/public/index.html
 
-RUN go mod init guestbook
-RUN go mod tidy
+    # app listens on 3000 (matches your deployment.yml)
+    EXPOSE 3000
 
-RUN go build -o main main.go
-
-FROM ubuntu:18.04
-
-<Please fill in the required Docker command> --from=builder /app/main /app/guestbook
-
-<Please fill in the required Docker command> public/index.html /app/public/index.html
-<Please fill in the required Docker command> public/script.js /app/public/script.js
-<Please fill in the required Docker command> public/style.css /app/public/style.css
-<Please fill in the required Docker command> public/jquery.min.js /app/public/jquery.min.js
-
-WORKDIR /app
-
-CMD ["./guestbook"]
-<Please fill in the required Docker command> 3000
+    # start the app
+    CMD ["/app/guestbook"]
